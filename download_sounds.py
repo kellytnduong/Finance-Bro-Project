@@ -1,5 +1,6 @@
 from http.client import IncompleteRead
 import urllib.request, json
+import urllib.error
 import sys
 import os
 
@@ -25,23 +26,38 @@ def save_json(searchTerms, birdName):
         print("Creating subdirectory " + path + " for downloaded files...")
         os.makedirs(path)
         # download a json file for every page found in a query
-    while page < numPages + 1:
-        print("Loading page " + str(page) + "...")
+
+    page = 1
+
+    while True:
         url = 'https://www.xeno-canto.org/api/2/recordings?query={0}&page={1}'.format(searchTerms.replace(' ', '%20'),
-                                                                                      page)
-        print(url)
-        jsonPage = urllib.request.urlopen(url)
-        jsondata = json.loads(jsonPage.read().decode('utf-8'))
-        filename = path + "/jsondata_p" + str(page) + ".json"
-        with open(filename, 'w') as outfile:
-            json.dump(jsondata, outfile)
-        # check number of pages
-        numPages = jsondata['numPages']
-        page = page + 1
+                                                                                        page)
+        try:
+            with urllib.request.urlopen(url) as response:
+                data = response.read().decode()
+                json_data = json.loads(data)
+                for i in range(len(json_data['recordings'])):
+                    if int(json_data['recordings'][i]['length'].replace(':','')) < 30:
+                        filename = path + "/json_data_p" + str(page) + ".json"
+                        with open(filename, 'w') as outfile:
+                            json.dump(json_data, outfile)
+                if page < json_data['numPages']:
+                        page += 1
+                else:
+                    print(page,json_data['numPages'])
+                    print(url)
+                    break
+
+        except urllib.error.URLError as e:
+            print(f"Failed to fetch recordings. Error: {e}")
+            break
+
+    ###
+
     print("Found ", numPages, " pages in total.")
     # return number of files in json
     # each page contains 500 results, the last page can have less than 500 records
-    print("Saved json for ", (numPages - 1) * 500 + len(jsondata['recordings']), " files")
+    print("Saved json for ", (numPages - 1) * 500 + len(json_data['recordings']), " files")
     return path
 
 
@@ -55,17 +71,17 @@ def read_data(searchTerm, path):
     # read all pages and save results in a list
     while page < numPages + 1:
         # read file
-        with open(path + "/jsondata_p" + str(page) + ".json", 'r') as jsonfile:
+        with open(path + "/json_data_p" + str(page) + ".json", 'r') as jsonfile:
             try:
-                jsondata = jsonfile.read()
+                json_data = jsonfile.read()
             except IncompleteRead:
                 continue
-        jsondata = json.loads(jsondata)
+        json_data = json.loads(json_data)
         # check number of pages
-        numPages = jsondata['numPages']
+        numPages = json_data['numPages']
         # find "recordings" in a json and save a list with a search term
-        for k in range(len(jsondata['recordings'])):
-            data.append(jsondata["recordings"][k][searchTerm])
+        for k in range(len(json_data['recordings'])):
+            data.append(json_data["recordings"][k][searchTerm])
         page = page + 1
     return data
 
