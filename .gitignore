@@ -1,0 +1,3 @@
+# ignore ALL files in ANY directory named birds_audio
+birds_audio/ 
+virtual_finance_bros/
